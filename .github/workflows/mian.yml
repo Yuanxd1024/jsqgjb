@@ -1,43 +1,67 @@
-name: 嘉立创自动抢购
+name: 嘉立创全自动并发抢购
 
 on:
-  workflow_dispatch:  # 手动触发
+  workflow_dispatch:  # 允许手动触发
   schedule:
-    - cron: '0 23 * * *'
-    # 每天北京时间9点运行（UTC时间01点）
-    # 实际运行可能延迟1小时内，取决于GitHub资源
-
-env: # 公共推送环境变量（所有job共享，从secrets读取）
-  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-  TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-  WECHAT_WEBHOOK_KEY: ${{ secrets.WECHAT_WEBHOOK_KEY }}
-  DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
-  PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
-  SERVERCHAN_SCKEY: ${{ secrets.SERVERCHAN_SCKEY }}
-  COOLPUSH_SKEY: ${{ secrets.COOLPUSH_SKEY }}
-  CUSTOM_WEBHOOK: ${{ secrets.CUSTOM_WEBHOOK }}
+    # 每天 UTC 0点 (北京时间 08:00) 运行
+    - cron: '00 00 * * *'
 
 jobs:
-  running-1:
+  # 第一阶段：解析配置
+  prepare-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v3
+
+      - name: 读取配置生成矩阵
+        id: set-matrix
+        run: |
+          # 使用 jq 将 json 文件压缩为单行字符串，用于传递给下一个任务
+          JSON=$(jq -c . ./config.json)
+          echo "matrix=$JSON" >> $GITHUB_OUTPUT
+
+  # 第二阶段：并发执行 (根据账号数量自动并行)
+  seckill-attack:
+    needs: prepare-matrix
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false # 关键：一个账号失败不影响其他账号
+      max-parallel: 20 # GitHub 免费版限制并发数，防止排队过长
+      matrix:
+        account: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
+    
+    name: 抢购-${{ matrix.account.username }}
+    
     steps:
       - name: '检出代码'
         uses: actions/checkout@v3
+        
       - name: '设置Python环境'
         uses: actions/setup-python@v5
         with:
-          python-version: 3.7
-      - name: '设置时区为北京时间'
-        run: |
-          sudo timedatectl set-timezone Asia/Shanghai
-          echo "当前时间: $(date)"
+          python-version: 3.9
+          
+      - name: '设置时区'
+        run: sudo timedatectl set-timezone Asia/Shanghai
+          
       - name: '安装依赖'
         run: |
-          pip install --upgrade pip
-          pip install pytz
-          pip install -r ./requirements.txt
+          pip install selenium pytz
+          
       - name: '准备Chrome驱动'
         uses: nanasess/setup-chromedriver@v2
-      - name: '进行抢购'
+        
+      - name: '执行抢购'
+        env:
+          # 也可以在这里把参数映射为环境变量
+          USER: ${{ matrix.account.username }}
+          PWD: ${{ matrix.account.password }}
+          SKU: ${{ matrix.account.sku }}
+          ACT_ID: ${{ matrix.account.activity_id }}
         run: |
-          python ./jlc.py "8753067A" "Zz123123" "${{ secrets.ERROR }}"
+          echo "正在启动任务：用户 $USER 目标 $SKU"
+          # 将参数传递给 Python 脚本
+          python ./jlc.py "$USER" "$PWD" "$SKU" "$ACT_ID"
