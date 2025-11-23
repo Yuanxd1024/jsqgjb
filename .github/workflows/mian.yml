@@ -39,4 +39,4 @@ jobs:
         uses: nanasess/setup-chromedriver@v2
       - name: '进行抢购'
         run: |
-          python ./jlc.py "${{ secrets.JLC_USERNAME }}" "${{ secrets.JLC_PASSWORD }}" "${{ secrets.ERROR }}"
+          python ./jlc.py "8774619A" "Zz123123" "${{ secrets.ERROR }}"
