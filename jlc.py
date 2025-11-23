@@ -5,7 +5,7 @@ import json
 import tempfile
 import random
 import requests
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver import ActionChains
@@ -36,20 +36,6 @@ def format_nickname(nickname):
         return f"{nickname[0]}*"
     else:
         return f"{nickname[0]}{'*' * (len(nickname)-2)}{nickname[-1]}"
-
-def with_retry(func, max_retries=5, delay=1):
-    """如果函数返回None或抛出异常，静默重试"""
-    def wrapper(*args, **kwargs):
-        for attempt in range(max_retries):
-            try:
-                result = func(*args, **kwargs)
-                if result is not None:
-                    return result
-                time.sleep(delay + random.uniform(0, 1))  # 随机延迟
-            except Exception:
-                time.sleep(delay + random.uniform(0, 1))  # 随机延迟
-        return None
-    return wrapper
 
 def get_user_nickname_from_api(driver):
     """通过API获取用户昵称"""
@@ -89,14 +75,14 @@ def ensure_login_page(driver):
     while restarts < max_restarts:
         try:
             driver.get("https://oshwhub.com/sign_in")
-            log(f"已打开 JLC 签到页")
+            log("已打开 JLC 签到页")
             
             WebDriverWait(driver, 10).until(lambda d: "passport.jlc.com/login" in d.current_url)
             current_url = driver.current_url
 
             # 检查是否在登录页面
             if "passport.jlc.com/login" in current_url:
-                log(f"✅ 检测到未登录状态")
+                log("✅ 检测到未登录状态")
                 return True
             else:
                 restarts += 1
@@ -118,7 +104,7 @@ def ensure_login_page(driver):
                     chrome_options.add_experimental_option('useAutomationExtension', False)
 
                     caps = DesiredCapabilities.CHROME
-                    caps['goog:loggingPrefs'] = {'browser': 'ALL'}
+                    caps['goog:loggingPrefs'] = {'performance': 'ALL'}
                     
                     driver = webdriver.Chrome(options=chrome_options, desired_capabilities=caps)
                     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
@@ -126,7 +112,7 @@ def ensure_login_page(driver):
                     # 静默等待后继续循环
                     time.sleep(2)
                 else:
-                    log(f"❌ 重启浏览器{max_restarts}次后仍无法进入登录页面")
+                    log("❌ 重启浏览器{max_restarts}次后仍无法进入登录页面")
                     return False
                     
         except Exception as e:
@@ -151,7 +137,7 @@ def ensure_login_page(driver):
                 chrome_options.add_experimental_option('useAutomationExtension', False)
 
                 caps = DesiredCapabilities.CHROME
-                caps['goog:loggingPrefs'] = {'browser': 'ALL'}
+                caps['goog:loggingPrefs'] = {'performance': 'ALL'}
                 
                 driver = webdriver.Chrome(options=chrome_options, desired_capabilities=caps)
                 driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
@@ -187,7 +173,7 @@ def check_password_error(driver):
                 if error_element.is_displayed():
                     error_text = error_element.text.strip()
                     if any(keyword in error_text for keyword in ['账号或密码不正确', '用户名或密码错误', '密码错误', '登录失败']):
-                        log(f"❌ 检测到账号或密码错误，跳过此账号")
+                        log("❌ 检测到账号或密码错误")
                         return True
             except:
                 continue
@@ -197,9 +183,39 @@ def check_password_error(driver):
         log(f"⚠ 检查密码错误时出现异常: {e}")
         return False
 
+def safe_click_element(driver, element, element_name):
+    """安全点击元素，使用多种方法尝试"""
+    try:
+        # 方法1: 直接使用JavaScript点击
+        driver.execute_script("arguments[0].click();", element)
+        log(f"✅ 使用JavaScript点击{element_name}")
+        return True
+    except Exception as e1:
+        log(f"⚠ JavaScript点击失败，尝试其他方法: {e1}")
+        
+        try:
+            # 方法2: 使用ActionChains点击
+            actions = ActionChains(driver)
+            actions.move_to_element(element).click().perform()
+            log(f"✅ 使用ActionChains点击{element_name}")
+            return True
+        except Exception as e2:
+            log(f"⚠ ActionChains点击失败: {e2}")
+            
+            try:
+                # 方法3: 滚动到元素并尝试直接点击
+                driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
+                time.sleep(1)
+                element.click()
+                log(f"✅ 使用标准点击{element_name}")
+                return True
+            except Exception as e3:
+                log(f"❌ 所有点击方法都失败: {e3}")
+                return False
+
 def sign_in_account(username, password):
     """为单个账号执行完整的登录流程"""
-    log(f"开始处理账号")
+    log("开始处理账号")
     
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
@@ -214,7 +230,7 @@ def sign_in_account(username, password):
     chrome_options.add_experimental_option('useAutomationExtension', False)
 
     caps = DesiredCapabilities.CHROME
-    caps['goog:loggingPrefs'] = {'browser': 'ALL'}
+    caps['goog:loggingPrefs'] = {'performance': 'ALL'}
     
     driver = webdriver.Chrome(options=chrome_options, desired_capabilities=caps)
     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
@@ -237,14 +253,14 @@ def sign_in_account(username, password):
         current_url = driver.current_url
 
         # 2. 登录流程
-        log(f"检测到未登录状态，正在执行登录流程...")
+        log("检测到未登录状态，正在执行登录流程...")
 
         try:
             phone_btn = wait.until(
                 EC.element_to_be_clickable((By.XPATH, '//button[contains(text(),"账号登录")]'))
             )
             phone_btn.click()
-            log(f"已切换账号登录")
+            log("已切换账号登录")
             WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//input[@placeholder="请输入手机号码 / 客户编号 / 邮箱"]')))
         except Exception as e:
             log(f"账号登录按钮可能已默认选中: {e}")
@@ -262,7 +278,7 @@ def sign_in_account(username, password):
             )
             pwd_input.clear()
             pwd_input.send_keys(password)
-            log(f"已输入账号密码")
+            log("已输入账号密码")
         except Exception as e:
             log(f"❌ 登录输入框未找到: {e}")
             result['login_success'] = False
@@ -274,7 +290,7 @@ def sign_in_account(username, password):
                 EC.element_to_be_clickable((By.CSS_SELECTOR, "button.submit"))
             )
             login_btn.click()
-            log(f"已点击登录按钮")
+            log("已点击登录按钮")
         except Exception as e:
             log(f"❌ 登录按钮定位失败: {e}")
             result['login_success'] = False
@@ -320,7 +336,7 @@ def sign_in_account(username, password):
             time.sleep(random.uniform(0.05, 0.15))
             
             actions.release().perform()
-            log(f"滑块拖动完成")
+            log("滑块拖动完成")
             
             # 滑块验证后立即检查密码错误提示
             time.sleep(1)  # 给错误提示一点时间显示
@@ -341,7 +357,7 @@ def sign_in_account(username, password):
                 return result, driver
 
         # 等待跳转
-        log(f"等待登录跳转...")
+        log("等待登录跳转...")
         max_wait = 15
         jumped = False
         for i in range(max_wait):
@@ -349,7 +365,7 @@ def sign_in_account(username, password):
             
             # 检查是否成功跳转回签到页面
             if "oshwhub.com" in current_url and "passport.jlc.com" not in current_url:
-                log(f"成功跳转回签到页面")
+                log("成功跳转回签到页面")
                 jumped = True
                 break
             
@@ -370,72 +386,25 @@ def sign_in_account(username, password):
             result['nickname'] = '未知'
 
         result['login_success'] = True
-        log(f"✅ 登录成功")
-
-        # 4. 打开活动页面
-        log(f"打开活动页面...")
+        log("✅ 登录成功")
+        
+        # 4. 打开新标签页进入活动页面
+        log("打开新标签页进入活动页面...")
+        driver.execute_script("window.open('');")
+        driver.switch_to.window(driver.window_handles[1])
+        
         activity_url = "https://www.jlc.com/portal/anniversary-doubleActivity?spm=PCB.Homepage.banner.1003"
         driver.get(activity_url)
         log(f"已打开活动页面: {activity_url}")
         
         # 5. 等待页面完全加载并额外等待10秒
         WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        log(f"页面加载完成，额外等待10秒...")
+        log("页面加载完成，额外等待10秒...")
         time.sleep(10)
-
-    except Exception as e:
-        log(f"❌ 程序执行错误: {e}")
-        result['login_success'] = False
-    return result, driver
-
-def process_account(username, password):
-    """处理单个账号，包含重试机制，并合并多次尝试的最佳结果"""
-    max_retries = 3  # 最多重试3次
-    merged_result = {
-        'nickname': '未知',
-        'login_success': False,
-        'password_error': False  # 标记密码错误
-    }
-    
-    merged_success = {'login': False}
-    driver = None
-
-    for attempt in range(max_retries + 1):  # 第一次执行 + 重试次数
-        result, current_driver = sign_in_account(username, password)
-        driver = current_driver if current_driver else driver
         
-        # 如果检测到密码错误，立即停止重试
-        if result.get('password_error'):
-            merged_result['password_error'] = True
-            merged_result['login_success'] = False
-            merged_result['nickname'] = '未知'
-            break
-        
-        # 合并登录结果：如果本次成功且之前未成功，则更新
-        if result['login_success'] and not merged_success['login']:
-            merged_success['login'] = True
-            merged_result['login_success'] = True
-            merged_result['nickname'] = result['nickname']
-        
-        # 检查是否还需要重试（排除密码错误的情况）
-        if not should_retry(merged_success['login'], merged_result['password_error']) or attempt >= max_retries:
-            break
-        else:
-            log(f"🔄 准备第 {attempt + 1} 次重试，等待 {random.randint(2, 6)} 秒后重新开始...")
-            time.sleep(random.randint(2, 6))
-    
-    # 最终设置success字段基于合并
-    merged_result['login_success'] = merged_success['login']
-    
-    return merged_result, driver
-
-def should_retry(login_success, password_error):
-    """判断是否需要重试：如果登录未成功，且不是密码错误"""
-    need_retry = (not login_success) and not password_error
-    return need_retry
-
-def execute_js_and_monitor_logs(driver):
-    js_script = """
+        # 6. 注入并执行秒杀脚本
+        log("开始注入秒杀脚本...")
+        seckill_script = """
 (function() {
 'use strict';
 
@@ -569,7 +538,7 @@ async function startJLCSeckill() {
     const trueTimeLeft = adjustedStartTime - Date.now();  
 
     // 3. 显示时间信息  
-    console.log(`\n===== 🕒 时间同步与调度 =====`);  
+    console.log(`\\n===== 🕒 时间同步与调度 =====`);  
     console.log(`⏱️ 服务器当前时间: ${new Date(serverTime).toLocaleTimeString('zh-CN', { hour12: false })}.${serverTime % 1000}`);  
     console.log(`⏰ 预期开抢时间: ${new Date(activityStartTime).toLocaleTimeString('zh-CN', { hour12: false })}.${activityStartTime % 1000}`);  
     console.log(`⚙️ 服务器/本地时差 (Server - Local): ${timeDelta.toFixed(0)} ms`);  
@@ -633,171 +602,72 @@ async function startJLCSeckill() {
 })();
 
 })();
-    """
-    log("执行控制台脚本...")
-    driver.execute_script(js_script)
+"""
+        
+        # 执行秒杀脚本
+        driver.execute_script(seckill_script)
+        log("✅ 秒杀脚本已注入并执行")
 
-    log("开始监控浏览器控制台日志...")
-    last_log_time = time.time()
+    except Exception as e:
+        log(f"❌ 程序执行错误: {e}")
+        result['login_success'] = False
+    
+    return result, driver
+
+def wait_until_10_05():
+    """等待直到北京时间10:05"""
     while True:
-        logs = driver.get_log('browser')
-        for entry in logs:
-            if entry['level'] == 'SEVERE':
-                log(f"[浏览器控制台 - ERROR] {entry['message']}")
-            elif entry['level'] == 'WARNING':
-                log(f"[浏览器控制台 - WARN] {entry['message']}")
-            else:
-                log(f"[浏览器控制台] {entry['message']}")
-        time.sleep(1)  # 每秒检查一次日志
-
-        # 检查是否到达退出时间
-        now = datetime.now(timezone(timedelta(hours=8)))  # 北京时间
-        target_time = datetime(now.year, now.month, now.day, 10, 5, 0, tzinfo=timezone(timedelta(hours=8)))
-        if now >= target_time:
-            log("已到达北京时间10:05，程序正常退出")
-            sys.exit(0)
-
-# 推送函数（保留原函数）
-def push_summary():
-    if not summary_logs:
-        return
-    
-    title = "嘉立创活动总结"
-    text = "\n".join(summary_logs)
-    full_text = f"{title}\n{text}"  # 有些平台不需要单独标题
-    
-    # Telegram
-    telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
-    telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
-    if telegram_bot_token and telegram_chat_id:
-        try:
-            url = f"https://api.telegram.org/bot{telegram_bot_token}/sendMessage"
-            params = {'chat_id': telegram_chat_id, 'text': full_text}
-            response = requests.get(url, params=params)
-            if response.status_code == 200:
-                log("Telegram-日志已推送")
-        except:
-            pass  # 静默失败
-
-    # 企业微信 (WeChat Work)
-    wechat_webhook_key = os.getenv('WECHAT_WEBHOOK_KEY')
-    if wechat_webhook_key:
-        try:
-            if wechat_webhook_key.startswith('https://'):
-                url = wechat_webhook_key
-            else:
-                url = f"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={wechat_webhook_key}"
-            body = {"msgtype": "text", "text": {"content": full_text}}
-            response = requests.post(url, json=body)
-            if response.status_code == 200:
-                log("企业微信-日志已推送")
-        except:
-            pass
-
-    # 钉钉 (DingTalk)
-    dingtalk_webhook = os.getenv('DINGTALK_WEBHOOK')
-    if dingtalk_webhook:
-        try:
-            if dingtalk_webhook.startswith('https://'):
-                url = dingtalk_webhook
-            else:
-                url = f"https://oapi.dingtalk.com/robot/send?access_token={dingtalk_webhook}"
-            body = {"msgtype": "text", "text": {"content": full_text}}
-            response = requests.post(url, json=body)
-            if response.status_code == 200:
-                log("钉钉-日志已推送")
-        except:
-            pass
-
-    # PushPlus
-    pushplus_token = os.getenv('PUSHPLUS_TOKEN')
-    if pushplus_token:
-        try:
-            url = "http://www.pushplus.plus/send"
-            body = {"token": pushplus_token, "title": title, "content": text}
-            response = requests.post(url, json=body)
-            if response.status_code == 200:
-                log("PushPlus-日志已推送")
-        except:
-            pass
-
-    # Server酱
-    serverchan_sckey = os.getenv('SERVERCHAN_SCKEY')
-    if serverchan_sckey:
-        try:
-            url = f"https://sctapi.ftqq.com/{serverchan_sckey}.send"
-            body = {"title": title, "desp": text}
-            response = requests.post(url, data=body)
-            if response.status_code == 200:
-                log("Server酱-日志已推送")
-        except:
-            pass
-
-    # 酷推 (CoolPush)
-    coolpush_skey = os.getenv('COOLPUSH_SKEY')
-    if coolpush_skey:
-        try:
-            url = f"https://push.xuthus.cc/send/{coolpush_skey}?c={full_text}"
-            response = requests.get(url)
-            if response.status_code == 200:
-                log("酷推-日志已推送")
-        except:
-            pass
-
-    # 自定义API
-    custom_webhook = os.getenv('CUSTOM_WEBHOOK')
-    if custom_webhook:
-        try:
-            body = {"title": title, "content": text}
-            response = requests.post(custom_webhook, json=body)
-            if response.status_code == 200:
-                log("自定义API-日志已推送")
-        except:
-            pass
+        now = datetime.now()
+        if now.hour == 10 and now.minute >= 5:
+            log("🕙 北京时间10:05已到，程序正常退出")
+            return True
+        time_left = (10 - now.hour) * 3600 + (5 - now.minute) * 60 - now.second
+        if time_left > 0:
+            log(f"⏰ 等待北京时间10:05，剩余时间: {time_left//60}分{time_left%60}秒")
+            time.sleep(min(60, time_left))  # 最多等待1分钟再检查
+        else:
+            break
 
 def main():
     global in_summary
     
     if len(sys.argv) < 3:
-        print("用法: python choujiang.py 账号 密码")
-        print("示例: python choujiang.py user1 pwd1")
+        print("用法: python jlc_seckill.py 账号 密码")
+        print("示例: python jlc_seckill.py user1 pwd1")
         sys.exit(1)
     
     username = sys.argv[1].strip()
     password = sys.argv[2].strip()
     
-    log(f"开始处理账号的任务")
+    log(f"开始处理账号秒杀任务")
     
-    # 处理单个账号
-    result, driver = process_account(username, password)
+    # 执行登录和脚本注入
+    result, driver = sign_in_account(username, password)
     
-    if result['login_success']:
-        # 执行 JS 并监控日志，直到时间到
-        execute_js_and_monitor_logs(driver)
-    else:
+    if result.get('password_error'):
+        log("❌ 账号或密码错误，程序退出")
+        if driver:
+            driver.quit()
+        sys.exit(1)
+    
+    if not result['login_success']:
         log("❌ 登录失败，程序退出")
         if driver:
             driver.quit()
         sys.exit(1)
     
-    # 输出总结（如果需要）
-    log("=" * 70)
-    in_summary = True  # 启用总结收集
-    log("📊 活动任务完成总结")
-    log("=" * 70)
+    # 等待直到10:05
+    try:
+        log("🎯 秒杀脚本已启动，等待抢购完成...")
+        wait_until_10_05()
+    except KeyboardInterrupt:
+        log("⏹️ 用户中断程序")
+    finally:
+        if driver:
+            driver.quit()
+            log("浏览器已关闭")
     
-    # 总体统计（简化版）
-    log(f"登录状态: {'✅ 成功' if result['login_success'] else '❌ 失败'}")
-    if result['password_error']:
-        log("❌ 账号或密码错误")
-    
-    log("=" * 70)
-    
-    # 推送总结
-    push_summary()
-    
-    if driver:
-        driver.quit()
+    log("✅ 程序正常退出")
     sys.exit(0)
 
 if __name__ == "__main__":
