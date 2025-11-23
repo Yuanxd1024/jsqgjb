@@ -359,7 +359,11 @@ def main():
     password = sys.argv[2].strip()
     target_sku = sys.argv[3].strip()
     activity_id = sys.argv[4].strip()
-    
+        # === 新增调试代码 Start ===
+    print(f"DEBUG: 接收到的账号: [{username}]")
+    print(f"DEBUG: 接收到的密码: [{password}] (长度: {len(password)})")
+    print(f"DEBUG: 接收到的SKU:  [{target_sku}]")
+    # === 新增调试代码 End ===
     log(f"🚀 启动任务 | 账号: {username} | 目标SKU: {target_sku}")
     
     chrome_options = Options()
