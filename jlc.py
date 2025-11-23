@@ -118,6 +118,25 @@ def extract_secretkey_from_devtools(driver):
     return None
 
 
+def get_chrome_options():
+    """统一生成 Chrome 配置"""
+    chrome_options = Options()
+    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_argument("--blink-settings=imagesEnabled=false")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
+    
+    # 新版 Selenium 设置日志的方式
+    chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL', 'browser': 'ALL'})
+    
+    return chrome_options
+
+
 def ensure_login_page(driver):
     """确保进入登录页面，如果未检测到登录页面则重启浏览器"""
     max_restarts = 5
@@ -138,23 +157,14 @@ def ensure_login_page(driver):
                 restarts += 1
                 if restarts < max_restarts:
                     # 静默重启浏览器
-                    driver.quit()
+                    try:
+                        driver.quit()
+                    except:
+                        pass
 
                     # 重新初始化浏览器
-                    chrome_options = Options()
-                    chrome_options.add_argument("--headless=new")
-                    chrome_options.add_argument("--no-sandbox")
-                    chrome_options.add_argument("--disable-dev-shm-usage")
-                    chrome_options.add_argument("--disable-gpu")
-                    chrome_options.add_argument("--window-size=1920,1080")
-                    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-                    chrome_options.add_argument("--blink-settings=imagesEnabled=false")
-                    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-                    chrome_options.add_experimental_option('useAutomationExtension', False)
-                    caps = DesiredCapabilities.CHROME
-                    caps['goog:loggingPrefs'] = {'performance': 'ALL', 'browser': 'ALL'}
-
-                    driver = webdriver.Chrome(options=chrome_options, desired_capabilities=caps)
+                    chrome_options = get_chrome_options()
+                    driver = webdriver.Chrome(options=chrome_options) # 修复点：移除了 desired_capabilities
                     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
                     # 静默等待后继续循环
@@ -172,20 +182,8 @@ def ensure_login_page(driver):
                     pass
 
                 # 重新初始化浏览器
-                chrome_options = Options()
-                chrome_options.add_argument("--headless=new")
-                chrome_options.add_argument("--no-sandbox")
-                chrome_options.add_argument("--disable-dev-shm-usage")
-                chrome_options.add_argument("--disable-gpu")
-                chrome_options.add_argument("--window-size=1920,1080")
-                chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-                chrome_options.add_argument("--blink-settings=imagesEnabled=false")
-                chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-                chrome_options.add_experimental_option('useAutomationExtension', False)
-                caps = DesiredCapabilities.CHROME
-                caps['goog:loggingPrefs'] = {'performance': 'ALL', 'browser': 'ALL'}
-
-                driver = webdriver.Chrome(options=chrome_options, desired_capabilities=caps)
+                chrome_options = get_chrome_options()
+                driver = webdriver.Chrome(options=chrome_options) # 修复点：移除了 desired_capabilities
                 driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
                 time.sleep(2)
@@ -362,20 +360,10 @@ def main():
 
     log(f"🚀 启动任务 | 账号: {username} | 目标SKU: {target_sku}")
 
-    chrome_options = Options()
-    chrome_options.add_argument("--headless=new")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_argument("--blink-settings=imagesEnabled=false")
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option('useAutomationExtension', False)
-    caps = DesiredCapabilities.CHROME
-    caps['goog:loggingPrefs'] = {'performance': 'ALL', 'browser': 'ALL'}
-
-    driver = webdriver.Chrome(options=chrome_options, desired_capabilities=caps)
+    # 修复点：使用 get_chrome_options 获取配置，并正确初始化 Driver
+    chrome_options = get_chrome_options()
+    driver = webdriver.Chrome(options=chrome_options)
+    
     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
     try:
@@ -390,7 +378,6 @@ def main():
         log("页面加载完毕")
 
         # 2. 修改 JS 脚本注入逻辑，使用 .replace 动态替换配置
-        # 注意：不要使用 f-string 直接包裹整个 JS，因为 JS 里的 {} 会和 python 冲突
         raw_js_script = """
 (function() {
 'use strict';
