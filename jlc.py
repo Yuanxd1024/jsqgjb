@@ -464,7 +464,7 @@ const CONFIG = {
     BURST_COUNT: 100,   
 
     // 提前多少毫秒开始预热请求 (Lead Time)  
-    leadTime: 250  
+    leadTime: 300  
 };  
 
 // 接口地址  
