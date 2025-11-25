@@ -460,8 +460,8 @@ const CONFIG = {
     targetSku: "REPLACE_TARGET_SKU",   
 
     // 并发突发请求数量：在开抢时，脚本会立即发送这个数量的请求。  
-    // 就166吧，立创服务器太拉了，太多别给他干爆了  
-    BURST_COUNT: 166,   
+    // 就100吧，立创服务器太拉了，太多别给他干爆了  
+    BURST_COUNT: 100,   
 
     // 提前多少毫秒开始预热请求 (Lead Time)  
     leadTime: 250  
