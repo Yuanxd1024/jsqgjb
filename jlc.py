@@ -684,21 +684,31 @@ async function startJLCSeckill() {
         log(f"程序将等待直到北京时间 {target_time.strftime('%Y-%m-%d %H:%M:%S')} 后退出")
         
         last_logs = []
+        success = False
         while datetime.now(beijing_tz) < target_time:
             # 获取浏览器控制台日志
             try:
                 browser_logs = driver.get_log('browser')
                 new_logs = [entry for entry in browser_logs if entry not in last_logs]
                 for entry in new_logs:
-                    log(f"浏览器控制台输出: {entry['message']}")
+                    message = entry['message']
+                    log(f"浏览器控制台输出: {message}")
+                    # 检查成功消息（忽略具体count值，只检查关键短语）
+                    if "🎉🎉🎉 牛逼抢到了！总共发送" in message and "次请求！ 🎉🎉🎉" in message:
+                        success = True
+                        log("✅ 检测到抢购成功消息！")
                 last_logs.extend(new_logs)
             except Exception as e:
                 log(f"获取浏览器日志出错: {e}")
             
             time.sleep(1)  # 每秒检查一次
         
-        log("已达到北京时间10:05，程序正常退出")
-        sys.exit(0)
+        if success:
+            log("已达到北京时间10:05，抢购成功，程序正常退出（退出码 0）")
+            sys.exit(0)
+        else:
+            log("已达到北京时间10:05，未检测到抢购成功消息，程序退出（退出码 1）")
+            sys.exit(1)
     
     except Exception as e:
         log(f"❌ 程序执行错误: {e}")
