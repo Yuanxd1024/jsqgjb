@@ -7,7 +7,7 @@ on:
     - cron: '00 22 * * *'
 
 jobs:
-  # 第一阶段：解析配置
+  # 第一阶段：解析配置并注入序号
   prepare-matrix:
     runs-on: ubuntu-latest
     outputs:
@@ -16,12 +16,34 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v3
 
-      - name: 读取配置生成矩阵
+      - name: 读取配置生成带序号的矩阵
         id: set-matrix
         run: |
-          # 使用 jq 将 json 文件压缩为单行字符串，用于传递给下一个任务
-          JSON=$(jq -c . ./config.json)
-          echo "matrix=$JSON" >> $GITHUB_OUTPUT
+          # 使用 Python 处理 json，为每个对象添加 index 字段（自动补零，例如 01, 02）
+          # 这样可以确保 Job 名字在 UI 上按顺序排列
+          python3 -c '
+          import json
+          import os
+
+          try:
+              with open("./config.json", "r", encoding="utf-8") as f:
+                  data = json.load(f)
+              
+              # 遍历并添加序号
+              for i, item in enumerate(data):
+                  # 格式化为 01, 02... 适合最多99个账号，如果更多请改为 {:03d}
+                  item["index"] = "{:02d}".format(i + 1)
+              
+              # 输出压缩后的 JSON
+              json_str = json.dumps(data)
+              # 写入 GitHub Output
+              with open(os.environ["GITHUB_OUTPUT"], "a") as env_file:
+                  env_file.write(f"matrix={json_str}")
+                  
+          except Exception as e:
+              print(f"Error processing config: {e}")
+              exit(1)
+          '
 
   # 第二阶段：并发执行 (根据账号数量自动并行)
   seckill-attack:
@@ -33,7 +55,8 @@ jobs:
       matrix:
         account: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
     
-    name: 抢购-${{ matrix.account.username }}
+    # 修改此处：在名字前加上序号，强制 GitHub UI 按此排序
+    name: ${{ matrix.account.index }}-抢购-${{ matrix.account.username }}
     
     steps:
       - name: '检出代码'
@@ -63,12 +86,11 @@ jobs:
         
       - name: '执行抢购'
         env:
-          # 也可以在这里把参数映射为环境变量
           USER: ${{ matrix.account.username }}
           PASSWORD: ${{ matrix.account.password }}
           SKU: ${{ matrix.account.sku }}
           ACT_ID: ${{ matrix.account.activity_id }}
         run: |
-          echo "正在启动任务：用户 $USER 目标 $SKU"
+          echo "正在启动任务 [${{ matrix.account.index }}]：用户 $USER 目标 $SKU"
           # 将参数传递给 Python 脚本
           python ./jlc.py "$USER" "$PASSWORD" "$SKU" "$ACT_ID"
